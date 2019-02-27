@@ -18,28 +18,33 @@
 // NSColorHexadecimalValue from http://developer.apple.com/library/mac/#qa/qa1576/_index.html
 -(NSString *)hexValue {
   CGFloat redFloatValue, greenFloatValue, blueFloatValue;
+  CGFloat alphaFloatValue;
   int redIntValue, greenIntValue, blueIntValue;
+  int alphaIntValue;
   NSString *redHexValue, *greenHexValue, *blueHexValue;
+  NSString *alphaHexValue;
 
   // Convert the NSColor to the RGB color space before we can access its components
   NSColor *convertedColor = [self colorUsingColorSpaceName:NSCalibratedRGBColorSpace];
 
   if(convertedColor) {
     // Get the red, green, and blue components of the color
-    [convertedColor getRed:&redFloatValue green:&greenFloatValue blue:&blueFloatValue alpha:NULL];
+    [convertedColor getRed:&redFloatValue green:&greenFloatValue blue:&blueFloatValue alpha:&alphaFloatValue];
 
     // Convert the components to numbers (unsigned decimal integer) between 0 and 255
     redIntValue=redFloatValue*255.99999f;
     greenIntValue=greenFloatValue*255.99999f;
     blueIntValue=blueFloatValue*255.99999f;
+    alphaIntValue=alphaFloatValue*255.99999f;
 
     // Convert the numbers to hex strings
     redHexValue=[NSString stringWithFormat:@"%02x", redIntValue];
     greenHexValue=[NSString stringWithFormat:@"%02x", greenIntValue];
     blueHexValue=[NSString stringWithFormat:@"%02x", blueIntValue];
+    alphaHexValue=[NSString stringWithFormat:@"%02x", alphaIntValue];
 
     // Concatenate the red, green, and blue components' hex strings together
-    return [NSString stringWithFormat:@"%@%@%@", redHexValue, greenHexValue, blueHexValue];
+    return [NSString stringWithFormat:@"%@%@%@%@", alphaHexValue, redHexValue, greenHexValue, blueHexValue];
   }
   return nil;
 }
@@ -49,6 +54,7 @@
   NSColor *result = nil;
   unsigned int colorCode = 0;
   unsigned char redByte, greenByte, blueByte;
+  unsigned char alphaByte;
 
   if ([inColorString length] == 3) {
     NSString *newColor = [[NSString alloc] initWithFormat:@"%@%@%@%@%@%@",
@@ -59,11 +65,26 @@
       [inColorString substringWithRange: NSMakeRange(2,1)],
       [inColorString substringWithRange: NSMakeRange(2,1)]];
     inColorString = [newColor autorelease];
+  } else if ([inColorString length] == 4) {//#ARGB
+    NSString *newColor = [[NSString alloc] initWithFormat:@"%@%@%@%@%@%@%@%@",
+      [inColorString substringWithRange: NSMakeRange(0,1)],
+      [inColorString substringWithRange: NSMakeRange(0,1)],
+      [inColorString substringWithRange: NSMakeRange(1,1)],
+      [inColorString substringWithRange: NSMakeRange(1,1)],
+      [inColorString substringWithRange: NSMakeRange(2,1)],
+      [inColorString substringWithRange: NSMakeRange(2,1)],
+      [inColorString substringWithRange: NSMakeRange(3,1)],
+      [inColorString substringWithRange: NSMakeRange(3,1)]];
+    inColorString = [newColor autorelease];
   }
 
   if (nil != inColorString) {
     NSScanner *scanner = [NSScanner scannerWithString:inColorString];
     (void) [scanner scanHexInt:&colorCode]; // ignore error
+  }
+  alphaByte = 0xFF;
+  if (colorCode > 0x00FFffFF) {
+    alphaByte   = (unsigned char) (colorCode >> 24);
   }
   redByte   = (unsigned char) (colorCode >> 16);
   greenByte = (unsigned char) (colorCode >> 8);
@@ -71,7 +92,7 @@
   result = [NSColor colorWithCalibratedRed:(float)redByte / 0xff
                                      green:(float)greenByte/ 0xff
                                       blue:(float)blueByte / 0xff
-                                     alpha:1.0];
+                                     alpha:(float)alphaByte / 0xff];
   return result;
 }
 
@@ -113,7 +134,7 @@
 
   panel = [NSColorPanel sharedColorPanel];
   [panel setDelegate:self];
-  [panel setShowsAlpha:NO]; // TODO: support for rgba() output values
+  [panel setShowsAlpha:YES]; // TODO: support for rgba() output values
   [panel setAccessoryView:[accessoryView autorelease]];
   [panel setDefaultButtonCell:[button cell]];
 
@@ -168,6 +189,26 @@
 @end
 
 int main (int argc, const char * argv[]) {
+  NSString *startColor = @"FFFC860D"; //sublime icon orange
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+
+  if (argc >= 2){
+    startColor = [NSString stringWithCString:argv[1] encoding:NSASCIIStringEncoding];
+    [defaults setObject:startColor forKey:@"startColor"];
+  } else {
+    NSString *storedColor = [defaults stringForKey:@"startColor"];
+    if (storedColor != nil) {
+      startColor = storedColor;
+    }
+  }
+
+  int mode = [defaults integerForKey:@"mode"];
+  if (mode == -1) {
+    mode = (NSColorPanelMode)NSWheelModeColorPanel;
+  }
+  [defaults setObject:[NSNumber numberWithInt: mode] forKey:@"mode"];
+  [defaults synchronize]; // force a save
+
   NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
   NSApplication *app = [NSApplication sharedApplication];
   app.delegate = [[[Picker alloc] init] autorelease];
